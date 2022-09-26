@@ -10,8 +10,6 @@ library(SummarizedExperiment)
 library(RColorBrewer)
 library(shiny)
 library(pheatmap)
-library(plotrix)
-library(ADImpute)
 
 fPem <- function(x)
 {
@@ -118,10 +116,6 @@ shinyApp(
         se <- readRDS(input$se$datapath)
         
         reactivevalue$se <- se
-        
-        updateSelectizeInput(inputId = "norm_assay",
-                             choices = assayNames((reactivevalue$se)),
-                             selected = NULL)
         
         })
         
