@@ -46,66 +46,67 @@ shinyApp(
         fluid=TRUE,
         
         tabPanel("Upload Tab",
-        sidebarLayout(
-            sidebarPanel(
-                fileInput(
-                    "se",
-                    "Upload Summarized Experiment",
-                    multiple = FALSE,
-                    accept = ".RDS"
-                ),
-                actionButton('uploads', label = 'Upload'),
-                ),
-            mainPanel(
-                dataTableOutput("summary"),
-                )
-        )
-    ),
-    tabPanel("PEM Analysis Tab",
-             sidebarLayout(
-                 sidebarPanel(
-                     selectizeInput('assay','Choose assay for analysis',
-                                    multiple=FALSE,
-                                    choices = c(''),
-                                    selected = NULL),
-                     selectizeInput('condition','Choose metadata for analysis grouping',
-                                    multiple=FALSE,
-                                    choices = c(''),
-                                    selected = NULL),
-                     actionButton('analyze', label = 'Analyze PEM'),
-                 ),
-                 mainPanel(
-                     dataTableOutput("pem"),
-                     conditionalPanel(condition = "output.pem",
-                                      downloadButton("download_pems", "Download")),
+                 sidebarLayout(
+                     sidebarPanel(
+                         fileInput(
+                             "se",
+                             "Upload Summarized Experiment",
+                             multiple = FALSE,
+                             accept = ".RDS"
+                         ),
+                         actionButton('uploads', label = 'Upload'),
+                     ),
+                     mainPanel(
+                         dataTableOutput("summary"),
+                     )
                  )
-             )
-    ),
-    tabPanel("Visualization Tab",
-             sidebarLayout(
-                 sidebarPanel(
-                     selectizeInput('plot_type','Choose visualization',
-                                    multiple=FALSE,
-                                    choices = c('scatter','bar'),
-                                    selected = NULL),
-                     selectizeInput('gene_name','Choose gene to visualize',
-                                    multiple=FALSE,
-                                    choices = c(''),
-                                    selected = NULL),
-                     actionButton('plot', label = 'Plot')
-                 ),
-                 mainPanel(
-                     plotOutput('plots')
+        ),
+        tabPanel("PEM Analysis Tab",
+                 sidebarLayout(
+                     sidebarPanel(
+                         selectizeInput('assay','Choose assay for analysis',
+                                        multiple=FALSE,
+                                        choices = c(''),
+                                        selected = NULL),
+                         selectizeInput('condition','Choose metadata for analysis grouping',
+                                        multiple=FALSE,
+                                        choices = c(''),
+                                        selected = NULL),
+                         actionButton('analyze', label = 'Analyze PEM'),
+                     ),
+                     mainPanel(
+                         dataTableOutput("pem"),
+                         conditionalPanel(condition = "output.pem",
+                                          downloadButton("download_pems", "Download")),
+                     )
                  )
-             )
-    ),
+        ),
+        tabPanel("Visualization Tab",
+                 sidebarLayout(
+                     sidebarPanel(
+                         selectizeInput('plot_type','Choose visualization',
+                                        multiple=FALSE,
+                                        choices = c('scatter','bar'),
+                                        selected = NULL),
+                         selectizeInput('gene_name','Choose gene to visualize',
+                                        multiple=FALSE,
+                                        choices = c(''),
+                                        selected = NULL),
+                         actionButton('plot', label = 'Plot')
+                     ),
+                     mainPanel(
+                         plotOutput('plots'),
+                         dataTableOutput("tab")
+                     )
+                 )
+        ),
     ), 
     server = function(input, output) {
         
         reactivevalue=reactiveValues(se=NULL,
                                      data=NULL,
                                      scores=NULL
-                                     )
+        )
         
         observeEvent(input$uploads, {
             
@@ -215,48 +216,70 @@ shinyApp(
             cols <- c(brewer.pal(length(colnames(reactivevalue$scores)),name = 'Pastel1'))
             
             if (input$plot_type == 'scatter') {
-            
-            x <- round(length(colnames(reactivevalue$scores))/2)
-            y <- round(length(colnames(reactivevalue$scores)))
-            
-            output$plots <- renderPlot({
                 
-                par(mfrow=c(x,y)) 
+                x <- round(length(colnames(reactivevalue$scores))/2)
+                y <- round(length(colnames(reactivevalue$scores)))
                 
-                for (i in 1:length(colnames(reactivevalue$scores))) {
+                output$plots <- renderPlot({
                     
-                    counts <- log10(reactivevalue$data[,i])
-                                    
-                    pems <- reactivevalue$scores[,i] 
-                    smoothScatter(counts,
-                                  pems,
-                                  ylab="PEM Scores", 
-                                  xlab="log10 Counts",
-                                  main=colnames(reactivevalue$data[i]))
-                    points(log10(reactivevalue$data[input$gene_name,i]),
-                           reactivevalue$scores[input$gene_name,i],
-                           col="red",
-                           pch=16,
-                           cex=0.5)
+                    par(mfrow=c(x,y)) 
+                    
+                    for (i in 1:length(colnames(reactivevalue$scores))) {
+                        
+                        counts <- log10(reactivevalue$data[,i])
+                        
+                        pems <- reactivevalue$scores[,i] 
+                        smoothScatter(counts,
+                                      pems,
+                                      ylab="PEM Scores", 
+                                      xlab="log10 Counts",
+                                      main=colnames(reactivevalue$data[i]))
+                        points(log10(reactivevalue$data[input$gene_name,i]),
+                               reactivevalue$scores[input$gene_name,i],
+                               col="red",
+                               pch=16,
+                               cex=0.5)
+                    }
                 }
-            }
-            )
-            
+                )
+                
             }
             
             if (input$plot_type == 'bar') {
-            
-            output$plots <- renderPlot(barplot(reactivevalue$scores[input$gene_name,],
-                                             xlab='Sample Condition',
-                                             ylab='PEM Score',
-                                             main=input$gene_name,
-                                             col=cols)
-            )
+                
+                output$plots <- renderPlot(barplot(reactivevalue$scores[input$gene_name,],
+                                                   xlab='Sample Condition',
+                                                   ylab='PEM Score',
+                                                   main=input$gene_name,
+                                                   col=cols)
+                )
             }
+            
+            zero <- c()
+            negative <- c()
+            positive <- c()
+            for (i in colnames(reactivevalue$scores)) {
+                
+                total <- length(reactivevalue$scores[,i])
+                
+                zero <- c(zero,round(length(which(reactivevalue$scores[,i]==0))/total,digits = 2))
+                negative <- c(negative,round(length(which(reactivevalue$scores[,i]<0))/total,digits = 2))
+                positive <- c(positive,round(length(which(reactivevalue$scores[,i]>0))/total,digits = 2))
+            }
+            
+            pem_percents <- abind(zero,negative,positive,along=2)
+            
+            rownames(pem_percents) <- colnames(reactivevalue$scores)
+            
+            colnames(pem_percents) <- c('% zero','% negative','% positive')
+            
+            output$tab <- renderDT(pem_percents)
         }
         )
-            
-        })
         
+        
+    })
+
+
 
 
