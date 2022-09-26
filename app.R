@@ -10,6 +10,8 @@ library(SummarizedExperiment)
 library(RColorBrewer)
 library(shiny)
 library(pheatmap)
+library(plotrix)
+library(ADImpute)
 
 fPem <- function(x)
 {
@@ -96,6 +98,8 @@ shinyApp(
                      ),
                      mainPanel(
                          plotOutput('plots'),
+                         conditionalPanel(condition = "output.tab",
+                                          p('Percents of PEM Scores per Metadata Group')),
                          dataTableOutput("tab")
                      )
                  )
@@ -108,12 +112,20 @@ shinyApp(
                                      scores=NULL
         )
         
+        observeEvent(input$se, {
+            
+        se_location <- input$se$datapath
+        se <- readRDS(input$se$datapath)
+        
+        reactivevalue$se <- se
+        
+        updateSelectizeInput(inputId = "norm_assay",
+                             choices = assayNames((reactivevalue$se)),
+                             selected = NULL)
+        
+        })
+        
         observeEvent(input$uploads, {
-            
-            se_location <- input$se$datapath
-            se <- readRDS(input$se$datapath)
-            
-            reactivevalue$se <- se
             
             updateSelectizeInput(inputId = "assay",
                                  choices = assayNames((reactivevalue$se)),
@@ -274,12 +286,9 @@ shinyApp(
             colnames(pem_percents) <- c('% zero','% negative','% positive')
             
             output$tab <- renderDT(pem_percents)
+            
         }
         )
         
         
     })
-
-
-
-
