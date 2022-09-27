@@ -13,7 +13,7 @@ Alternatively, the app can be run from RStudio by opening `app.R` in RStudio and
 Data Format
 ------
 
-The app currently requires input data to be in a SummarizedExperiment Object. For a brief guide on how to format your data as a SummarizedExperiment Object, see `format.R`.
+The app currently supports input data to be in a SummarizedExperiment Object or count matrix and metadata table pair. For a brief guide on how to format your data as a SummarizedExperiment Object, see `format.R`. To upload with a count matrix, a metadata table will need to be uploaded as well. For an example of the required metadata table format, see `mock_metadata.csv`.
 
 Usage
 ------

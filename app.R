@@ -10,6 +10,7 @@ library(SummarizedExperiment)
 library(RColorBrewer)
 library(shiny)
 library(pheatmap)
+library(reader)
 
 fPem <- function(x)
 {
@@ -48,12 +49,27 @@ shinyApp(
         tabPanel("Upload Tab",
                  sidebarLayout(
                      sidebarPanel(
-                         fileInput(
-                             "se",
-                             "Upload Summarized Experiment",
-                             multiple = FALSE,
-                             accept = ".RDS"
-                         ),
+                         radioButtons("uploadChoice", "",
+                                      c("Count File and Metadata File" = "countFile",
+                                        "Summarized Experiment Object" = "seObject"
+                                      )),
+                         conditionalPanel(condition = "input.uploadChoice == 'seObject'",
+                                          fileInput(
+                                              "se",
+                                              "Upload Summarized Experiment",
+                                              multiple = FALSE,
+                                              accept = ".RDS"
+                                          )),
+                         conditionalPanel(condition = "input.uploadChoice == 'countFile'",
+                                          fileInput(
+                                              "counts",
+                                              "Upload Counts Table",
+                                              multiple = FALSE,
+                                              accept = ".csv"
+                                          ),
+                                          fileInput("md", "Upload Metadata Table",
+                                                    multiple = FALSE,
+                                                    accept = ".csv")),
                          actionButton('uploads', label = 'Upload'),
                      ),
                      mainPanel(
@@ -110,16 +126,39 @@ shinyApp(
                                      scores=NULL
         )
         
-        observeEvent(input$se, {
-            
-        se_location <- input$se$datapath
-        se <- readRDS(input$se$datapath)
-        
-        reactivevalue$se <- se
-        
-        })
-        
         observeEvent(input$uploads, {
+            
+            if (input$uploadChoice == 'countFile') {
+                
+            counts_matrix <- input$counts$datapath
+            
+            matrix <- read.table(counts_matrix,
+                             header = TRUE, row.names = 1,
+                             sep = get.delim(counts_matrix,
+                                             n = 10,
+                                             delims = c('\t',',')))
+            
+            metadata <- input$md$datapath
+            
+            md <- read.table(metadata,
+                                                 header = TRUE, row.names = 1,
+                                                 sep = get.delim(metadata,
+                                                                 n = 10,
+                                                                 delims = c('\t',',')))
+            
+            se <- SummarizedExperiment(list(counts = matrix),
+                                       colData = md)
+            reactivevalue$se <- se
+            
+            }
+            
+            if (input$uploadChoice == 'seObject') {
+            
+            se <- readRDS(input$se$datapath)
+            
+            reactivevalue$se <- se
+            
+            }
             
             updateSelectizeInput(inputId = "assay",
                                  choices = assayNames((reactivevalue$se)),
