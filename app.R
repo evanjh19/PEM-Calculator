@@ -118,7 +118,28 @@ shinyApp(
                      )
                  )
         ),
+        tabPanel("Top Genes Tab",
+                 sidebarLayout(
+                     sidebarPanel(
+                         numericInput(
+                             "top_pems",
+                             "Choose number of top PEM scores to visualize",
+                             10,
+                             min = NA,
+                             max = NA,
+                             step = NA,
+                             width = NULL
+                         ),
+                         actionButton('find', label = 'Find Top Genes')
+                     ),
+                     mainPanel(
+                         plotOutput("heatmap"),
+                         dataTableOutput("tops")
+                     )
+                 )
+        ),
     ), 
+    
     server = function(input, output) {
         
         reactivevalue=reactiveValues(se=NULL,
@@ -224,7 +245,7 @@ shinyApp(
                 
                 reactivevalue$data <- mean_data
                 
-                pems <- fPem(mean_data)
+                pems <- round(fPem(mean_data), digits = 2)
                 
                 pems <- pems[-c(which(rownames(pems)=="c")),]
                 
@@ -323,5 +344,52 @@ shinyApp(
         }
         )
         
+        observeEvent(input$find, {
+            
+            all_pems <- c()
+            
+            for (i in 1:length(colnames(reactivevalue$scores))) {
+            
+            vec1 <- -1
+            vec2 <- 1
+            tops <- input$top_pems/2
+            
+            pems <- setorderv(
+                as.data.frame(
+                        reactivevalue$scores),
+                colnames(reactivevalue$scores)[i],
+                vec1)
+            
+            pos_pems <- pems[1:tops,]
+            
+            pems <- setorderv(
+                as.data.frame(
+                        reactivevalue$scores),
+                colnames(reactivevalue$scores)[i],
+                vec2)
+            
+            neg_pems <- pems[1:tops,]
+            
+            tpems <- rbind(pos_pems,neg_pems)
+            
+            all_pems <- rbind(all_pems,tpems)
+            
+            }
+            
+            counts <- as.matrix(reactivevalue$data)
+            
+            cords <- c()
+            for (i in rownames(all_pems)) {
+                
+                cords <- c(cords,which(rownames(counts)==i))
+            }
+
+            output$heatmap <- renderPlot(pheatmap(counts[cords,],main='Heatmap of TPM Counts'))
+            
+            output$tops <- renderDataTable(all_pems
+            )
+            
+        }
+        )
         
     })
