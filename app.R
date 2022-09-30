@@ -11,6 +11,13 @@ library(RColorBrewer)
 library(shiny)
 library(pheatmap)
 library(reader)
+library(goseq)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(broom)
+library(stringr)
+library(cowplot)
 
 fPem <- function(x)
 {
@@ -102,12 +109,25 @@ shinyApp(
                      sidebarPanel(
                          selectizeInput('plot_type','Choose visualization',
                                         multiple=FALSE,
-                                        choices = c('scatter','bar'),
+                                        choices = c('scatter','bar','pca'),
                                         selected = NULL),
                          selectizeInput('gene_name','Choose gene to visualize',
                                         multiple=FALSE,
                                         choices = c(''),
                                         selected = NULL),
+                         conditionalPanel(condition = "input.plot_type == 'pca'",
+                                          selectizeInput('pca_1','Choose principle component to plot',
+                                                         multiple=F,choices = c(''),selected = NULL,
+                                                         options=list(placeholder = 'Please select an option below',onInitialize = I('function() { this.setValue(""); }'))
+                                          ),
+                                          selectizeInput('pca_2','Choose principle component to plot',
+                                                         multiple=F,choices = c(''),selected = NULL,
+                                                         options=list(placeholder = 'Please select an option below',onInitialize = I('function() { this.setValue(""); }'))
+                                          ),
+                                          selectizeInput('pca_col','Choose metadata previously used in PEM analysis grouping',
+                                                         multiple=F,choices = c(''),selected = NULL,
+                                                         options=list(placeholder = 'Please select an option below',onInitialize = I('function() { this.setValue(""); }'))
+                                          )),
                          actionButton('plot', label = 'Plot')
                      ),
                      mainPanel(
@@ -130,11 +150,18 @@ shinyApp(
                              step = NA,
                              width = NULL
                          ),
+                         selectizeInput('top_plots','Choose visualization',
+                                        multiple=FALSE,
+                                        choices = c('heat'),
+                                        selected = NULL),
                          actionButton('find', label = 'Find Top Genes')
                      ),
                      mainPanel(
                          plotOutput("heatmap"),
-                         dataTableOutput("tops")
+                         dataTableOutput("tops"),
+                         p(),
+                         conditionalPanel(condition = "output.tops",
+                                          downloadButton("download_top_pems", "Download")),
                      )
                  )
         ),
@@ -144,7 +171,9 @@ shinyApp(
         
         reactivevalue=reactiveValues(se=NULL,
                                      data=NULL,
-                                     scores=NULL
+                                     scores=NULL,
+                                     pca_fit=NULL,
+                                     counts_matrix=NULL
         )
         
         observeEvent(input$uploads, {
@@ -227,17 +256,18 @@ shinyApp(
             
             withProgress({
                 setProgress(0.5, 'Calculating...')
-                count_data <- as.data.frame(reactivevalue$se@assays@data[[input$assay]])
+                
+                reactivevalue$counts_matrix <- as.data.frame(reactivevalue$se@assays@data[[input$assay]])
                 
                 coldata <- colData(reactivevalue$se)
                 
-                colnames(count_data) <- coldata[,input$condition]
+                colnames(reactivevalue$counts_matrix) <- coldata[,input$condition]
                 
-                mean_data <- as.data.frame(sapply(unique(names(count_data)),
+                mean_data <- as.data.frame(sapply(unique(names(reactivevalue$counts_matrix)),
                                                   function(col)
                                                       rowMeans(
-                                                          count_data[names(
-                                                              count_data) == col]) 
+                                                          reactivevalue$counts_matrix[names(
+                                                              reactivevalue$counts_matrix) == col]) 
                 )
                 )
                 
@@ -272,6 +302,26 @@ shinyApp(
                         write.csv(reactivevalue$scores,file)
                     }
                 )
+                
+                updateSelectizeInput(inputId = "samples",
+                                     choices = colnames(reactivevalue$scores),
+                                     selected = NULL)
+                
+                pca_counts_matrix <- as_tibble(t(reactivevalue$counts_matrix[rowSums(reactivevalue$counts_matrix[])>0,]))
+                
+                reactivevalue$pca_fit <- pca_counts_matrix %>% 
+                    select(where(is.numeric)) %>% 
+                    prcomp(scale = TRUE)
+                
+                updateSelectizeInput(inputId="pca_col",
+                                     choices=colnames(colData(reactivevalue$se)),selected=NULL,
+                                     options=list(placeholder = 'Please select an option below',onInitialize = I('function() { this.setValue(""); }')))
+                updateSelectizeInput(inputId="pca_1",
+                                     choices=colnames(reactivevalue$pca_fit$x),selected=NULL,
+                                     options=list(placeholder = 'Please select an option below',onInitialize = I('function() { this.setValue(""); }')))
+                updateSelectizeInput(inputId="pca_2",
+                                     choices=colnames(reactivevalue$pca_fit$x),selected=NULL,
+                                     options=list(placeholder = 'Please select an option below',onInitialize = I('function() { this.setValue(""); }')))
             })
             
         }
@@ -321,6 +371,48 @@ shinyApp(
                 )
             }
             
+            if (input$plot_type == 'pca') {
+                
+                pca_counts_matrix <- as_tibble(t(reactivevalue$counts_matrix))
+                
+                row_to_plot <- which(rownames(reactivevalue$scores)==input$gene_name)
+                
+                reps <- c()
+                for (i in unique(colData(reactivevalue$se)[,input$pca_col])) {
+                        
+                        n <- length(which(colData(reactivevalue$se)[,input$pca_col]==i))
+                        
+                        reps <- c(reps,n)
+                }
+                
+                groups <- reactivevalue$scores[row_to_plot,]
+                
+                groups <- rep(groups,reps)
+                
+                pca_counts_matrix <- pca_counts_matrix %>%
+                    mutate(
+                        groups_col = groups,
+                    )
+                
+                pca_model <- reactivevalue$pca_fit %>%
+                    augment(pca_counts_matrix)
+                
+                pca_fit <- reactivevalue$pca_fit
+                
+                pc_1 <- as.numeric(str_replace_all(input$pca_1, "PC", ""))
+                pc_2 <- as.numeric(str_replace_all(input$pca_2, "PC", ""))
+                
+                eigs <- pca_fit$sdev^2
+                
+                output$plots <- renderPlot(pca_model %>% 
+                                             ggplot(aes(as.matrix(pca_model[,ncol(pca_counts_matrix)+1+pc_1]), 
+                                                        as.matrix(pca_model[,ncol(pca_counts_matrix)+1+pc_2]), 
+                                                        color = groups_col)) + 
+                                             ggtitle("Feature Counts PCA Plot") + xlab(paste(input$pca_1,round(eigs[pc_1] / sum(eigs), digits = 2))) + ylab(paste(input$pca_2,round(eigs[pc_2] / sum(eigs), digits = 2))) +
+                                             geom_point(size = 1.5) +
+                                             theme_half_open(12) + background_grid())
+            }
+            
             zero <- c()
             negative <- c()
             positive <- c()
@@ -348,6 +440,8 @@ shinyApp(
             
             all_pems <- c()
             
+            groups <- c()
+            
             for (i in 1:length(colnames(reactivevalue$scores))) {
             
             vec1 <- -1
@@ -372,9 +466,15 @@ shinyApp(
             
             tpems <- rbind(pos_pems,neg_pems)
             
+            sample_group <- rep(colnames(reactivevalue$scores)[i],tops)
+            
+            groups <- c(groups,sample_group)
+            
             all_pems <- rbind(all_pems,tpems)
             
             }
+            
+            all_pems <- cbind(all_pems,groups)
             
             counts <- as.matrix(reactivevalue$data)
             
@@ -383,8 +483,24 @@ shinyApp(
                 
                 cords <- c(cords,which(rownames(counts)==i))
             }
-
-            output$heatmap <- renderPlot(pheatmap(counts[cords,],main='Heatmap of TPM Counts'))
+            
+            output$tops <- renderDataTable(all_pems
+            )
+            
+            if (input$top_plots == 'heat') {
+                
+                output$heatmap <- renderPlot(pheatmap(counts[cords,],main='Heatmap of TPM Counts'))
+                
+            }
+            
+            output$download_top_pems <- downloadHandler(
+                filename = function() {
+                    paste("top_PEM_scores", ".csv", sep = "")
+                },
+                content = function(file) {
+                    write.csv(all_pems,file)
+                }
+            )
             
             output$tops <- renderDataTable(all_pems
             )
