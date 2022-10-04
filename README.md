@@ -1,7 +1,7 @@
 PEM Calculator
 =====
 
-Explore gene expression specificity with an interactive RShiny app.
+Explore counts comparisons with an interactive RShiny app.
 
 Run the App
 ------
