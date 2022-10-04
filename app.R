@@ -132,8 +132,6 @@ shinyApp(
                      ),
                      mainPanel(
                          plotOutput('plots'),
-                         conditionalPanel(condition = "output.tab",
-                                          p('Percents of PEM Scores per Metadata Group')),
                          dataTableOutput("tab")
                      )
                  )
@@ -377,21 +375,22 @@ shinyApp(
                 
                 row_to_plot <- which(rownames(reactivevalue$scores)==input$gene_name)
                 
-                reps <- c()
-                for (i in unique(colData(reactivevalue$se)[,input$pca_col])) {
-                        
-                        n <- length(which(colData(reactivevalue$se)[,input$pca_col]==i))
-                        
-                        reps <- c(reps,n)
-                }
-                
                 groups <- reactivevalue$scores[row_to_plot,]
                 
-                groups <- rep(groups,reps)
+                names(groups) <- colnames(reactivevalue$scores)
+                
+                reps <- c()
+                for (i in colData(reactivevalue$se)[,input$pca_col]) {
+                    
+                       cord <- which(names(groups)==i)
+                       
+                       reps <- c(reps,groups[cord])
+                    
+                }
                 
                 pca_counts_matrix <- pca_counts_matrix %>%
                     mutate(
-                        groups_col = groups,
+                        pem_scores = reps,
                     )
                 
                 pca_model <- reactivevalue$pca_fit %>%
@@ -407,31 +406,49 @@ shinyApp(
                 output$plots <- renderPlot(pca_model %>% 
                                              ggplot(aes(as.matrix(pca_model[,ncol(pca_counts_matrix)+1+pc_1]), 
                                                         as.matrix(pca_model[,ncol(pca_counts_matrix)+1+pc_2]), 
-                                                        color = groups_col)) + 
+                                                        color = pem_scores)) + 
                                              ggtitle("Feature Counts PCA Plot") + xlab(paste(input$pca_1,round(eigs[pc_1] / sum(eigs), digits = 2))) + ylab(paste(input$pca_2,round(eigs[pc_2] / sum(eigs), digits = 2))) +
                                              geom_point(size = 1.5) +
                                              theme_half_open(12) + background_grid())
             }
             
-            zero <- c()
-            negative <- c()
-            positive <- c()
-            for (i in colnames(reactivevalue$scores)) {
+            if (input$plot_type == 'pca') {
                 
-                total <- length(reactivevalue$scores[,i])
+                pcs <- lapply(eigs,function(x) {round(x / sum(eigs), digits = 2)})
                 
-                zero <- c(zero,round(length(which(reactivevalue$scores[,i]==0))/total,digits = 2))
-                negative <- c(negative,round(length(which(reactivevalue$scores[,i]<0))/total,digits = 2))
-                positive <- c(positive,round(length(which(reactivevalue$scores[,i]>0))/total,digits = 2))
+                pcs <- cbind(paste0("PC",1:length(eigs)),pcs)
+                
+                colnames(pcs) <- c("PC", "Variance Explained")
+            
+                output$tab <- renderDT(as.data.frame(pcs))
+            
             }
             
-            pem_percents <- abind(zero,negative,positive,along=2)
-            
-            rownames(pem_percents) <- colnames(reactivevalue$scores)
-            
-            colnames(pem_percents) <- c('% zero','% negative','% positive')
-            
-            output$tab <- renderDT(pem_percents)
+            else {
+                
+                zero <- c()
+                negative <- c()
+                positive <- c()
+                for (i in colnames(reactivevalue$scores)) {
+                    
+                    total <- length(reactivevalue$scores[,i])
+                    
+                    zero <- c(zero,round(length(which(reactivevalue$scores[,i]==0))/total,digits = 2))
+                    negative <- c(negative,round(length(which(reactivevalue$scores[,i]<0))/total,digits = 2))
+                    positive <- c(positive,round(length(which(reactivevalue$scores[,i]>0))/total,digits = 2))
+                }
+                
+                pem_percents <- abind(zero,negative,positive,along=2)
+                
+                rownames(pem_percents) <- colnames(reactivevalue$scores)
+                
+                colnames(pem_percents) <- c('% PEMs zero',
+                                            '% PEMs negative',
+                                            '% PEMs positive')
+                
+                output$tab <- renderDT(pem_percents)
+                
+            }
             
         }
         )
