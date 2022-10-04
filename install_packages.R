@@ -9,7 +9,14 @@ packs <- c('data.table',
            'RColorBrewer',
            'shiny',
            'pheatmap',
-           'reader')
+           'reader',
+           'goseq',
+           'ggplot2',
+           'tibble',
+           'dplyr',
+           'broom',
+           'stringr',
+           'cowplot')
 
 for (i in packs) {
     

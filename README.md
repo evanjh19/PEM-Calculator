@@ -23,6 +23,11 @@ PEM Calculator allows users to calculate Preferential Expression Measure (PEM) v
 
 A PEM score is calculated by dividing the observed expression count by an expected expression count and log-10 transforming this value. The observed expression count is the average expression count of a feature in a given group of a condition. The expected expression count in PEM score calculations is the sum of expression values observed for a gene multiplied by the sum of expression values observed for a given group divided by the sum of all expression values observed. A positive PEM score indicates over-expression of a gene and a negative PEM score indicates under-expression of a gene. 
 
+Installations
+------
+
+A convenience script to install all required packages for the app is provided by `install_packages.R`.
+
 Background
 ------
 
