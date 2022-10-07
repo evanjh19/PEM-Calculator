@@ -1,3 +1,4 @@
+PEM <- function() {
 require(shiny)
 
 options(shiny.maxRequestSize = 30*1024^2)
@@ -483,7 +484,7 @@ shinyApp(
             
             tpems <- rbind(pos_pems,neg_pems)
             
-            sample_group <- rep(colnames(reactivevalue$scores)[i],tops)
+            sample_group <- rep(colnames(reactivevalue$scores)[i],input$top_pems)
             
             groups <- c(groups,sample_group)
             
@@ -526,3 +527,6 @@ shinyApp(
         )
         
     })
+}
+
+PEM()
